@@ -101,6 +101,19 @@ struct MinCluster
     }
 };
 
+// ######################################################################
+struct ClusterDifference
+{
+  __host__ __device__
+    float operator()(ClassSummary const& c1, ClassSummary const& c2)
+    {
+      return abs(c1.mean_x - c2.mean_x) +
+             abs(c1.mean_y - c2.mean_y) +
+             abs(c1.mean_r - c2.mean_r) +
+             abs(c1.mean_g - c2.mean_g) +
+             abs(c1.mean_b - c2.mean_b);
+    }
+};
 
 
 // ######################################################################
@@ -119,8 +132,12 @@ std::vector<ClassSummary> kmeans(std::vector<PointDescriptor> & points, size_t c
 
   // Create a device copy of the class means
   thrust::device_vector<ClassSummary> device_class_means(k);
+  thrust::device_vector<ClassSummary> device_old_means(k);
 
-  for(int iteration=0; iteration<7; ++iteration)
+  thrust::device_vector<float> cluster_differences(k);
+
+  thrust::device_vector<float> point_distances(device_points.size());
+  for(int iteration=0; iteration<10; ++iteration)
   {
     std::cout << "Iteration " << iteration << std::endl;
 
@@ -136,26 +153,35 @@ std::vector<ClassSummary> kmeans(std::vector<PointDescriptor> & points, size_t c
     }
 
     // Assign each point to its new cluster
-    thrust::device_vector<float>  distances(device_points.size(), std::numeric_limits<float>::max());
+    thrust::fill(point_distances.begin(), point_distances.end(), std::numeric_limits<float>::max());
     for(size_t clusterIdx=0; clusterIdx<k; ++clusterIdx)
     {
       thrust::constant_iterator<ClassSummary> currentCluster(device_class_means[clusterIdx]);
 
       thrust::for_each(
-          thrust::make_zip_iterator(thrust::make_tuple(device_points.begin(), distances.begin(), currentCluster)),
-          thrust::make_zip_iterator(thrust::make_tuple(device_points.end(),   distances.end(),   currentCluster)),
+          thrust::make_zip_iterator(thrust::make_tuple(device_points.begin(), point_distances.begin(), currentCluster)),
+          thrust::make_zip_iterator(thrust::make_tuple(device_points.end(),   point_distances.end(),   currentCluster)),
           MinCluster());
     }
+
+    // Test for convergence
+    if(iteration > 0)
+    {
+      thrust::transform(device_class_means.begin(), device_class_means.end(), device_old_means.begin(), 
+          cluster_differences.begin(), ClusterDifference());
+      float min_distance = *(thrust::min_element(cluster_differences.begin(), cluster_differences.end()));
+      if(min_distance < std::numeric_limits<float>::min()) break;
+    }
+    device_old_means = device_class_means;
+   
   }
 
   thrust::host_vector<PointDescriptor> host_points = device_points;
   std::copy(host_points.begin(), host_points.end(), points.begin());
-
   thrust::host_vector<ClassSummary> host_class_means(device_class_means.size());
   thrust::copy(device_class_means.begin(), device_class_means.end(), host_class_means.begin());
   std::vector<ClassSummary> class_means(host_class_means.size());
   std::copy(host_class_means.begin(), host_class_means.end(), class_means.begin());
-  std::cout << "Done Grabbing ClassSummaries" << std::endl;
   return class_means;
 }
 
