@@ -28,7 +28,7 @@ struct ClassSummary
 
 struct ClassSummary_unary_op
 {
-  __host__ __device__
+  __device__
     ClassSummary operator()(const pointdescriptor& point) const
     {
       ClassSummary result;
@@ -94,6 +94,50 @@ struct ClassFinder
     }
 };
 
+struct ClassAssigner
+{
+  ClassSummary * classesPtr;
+  size_t const num_classes;
+  float const float_max;
+
+  __device__ __host__
+  ClassAssigner(thrust::device_vector<ClassSummary> class_means_) :
+    num_classes(class_means_.size()),
+    float_max(1000000000000000)
+  { 
+  
+    classesPtr = thrust::raw_pointer_cast(&class_means_[0]); 
+  
+  }
+
+  __device__
+    pointdescriptor operator()(pointdescriptor const& p) const
+    {
+      size_t min_idx = 0;
+      float min_dist = float_max;
+      for(size_t i=1; i<num_classes; ++i)
+      {
+
+        float dist = sqrt(pow(classesPtr[i].mean_x - p.x, 2) +
+                          pow(classesPtr[i].mean_y - p.y, 2) +
+                          pow(classesPtr[i].mean_r - p.r, 2) +
+                          pow(classesPtr[i].mean_g - p.g, 2) +
+                          pow(classesPtr[i].mean_b - p.b, 2));
+
+        if(min_dist > dist)
+        {
+          min_dist = dist;
+          min_idx = i;
+        }
+      }
+
+      pointdescriptor ret = p;
+      ret.classid = min_idx;
+      return ret;
+    }
+
+};
+
 // ######################################################################
 std::vector<size_t> kmeans(std::vector<pointdescriptor> & points, size_t k)
 {
@@ -131,6 +175,10 @@ std::vector<size_t> kmeans(std::vector<pointdescriptor> & points, size_t k)
     device_class_means[classid] = thrust::transform_reduce(classBegin, classEnd,
         unary_summary_op, init_summary, binary_summary_op);
   }
+
+  // Reassign all point descriptors to their nearest class
+  ClassAssigner assigner(device_class_means);
+  thrust::transform(device_points.begin(), device_points.end(), device_points.begin(), assigner);
 
 
 
