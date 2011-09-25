@@ -9,13 +9,13 @@
 
 // ######################################################################
 struct ClusterCompBinary :
-  public thrust::binary_function<const ClassSummary&, const ClassSummary&, ClassSummary>
+  public thrust::binary_function<ClassSummary const &, ClassSummary const &, ClassSummary>
 {
   size_t const clusterIdx;
   ClusterCompBinary(size_t const clusterIdx_) : clusterIdx(clusterIdx_) {}
 
   __host__ __device__
-    ClassSummary operator()(const ClassSummary & p1, const ClassSummary & p2) const
+    ClassSummary operator()(ClassSummary const & p1, ClassSummary const & p2) const
     {
       ClassSummary result;
 
@@ -56,8 +56,6 @@ struct ClusterCompBinary :
 
       return result;
     }
-
-
 };
 
 // ######################################################################
@@ -83,16 +81,17 @@ struct ClusterCompUnary
 // ######################################################################
 struct MinCluster
 {
+  template<typename Tuple>
   __host__ __device__
-    void operator()(thrust::tuple<PointDescriptor, float, ClassSummary> t)
+    void operator()(Tuple t)
     {
-      PointDescriptor const & p = thrust::get<0>(t);
+      //device_points, distances, currentCluster
 
-      float dist = sqrt(pow(thrust::get<2>(t).mean_x - p.x, 2) +
-                        pow(thrust::get<2>(t).mean_y - p.y, 2) +
-                        pow(thrust::get<2>(t).mean_r - p.r, 2) +
-                        pow(thrust::get<2>(t).mean_g - p.g, 2) +
-                        pow(thrust::get<2>(t).mean_b - p.b, 2));
+      float dist = sqrt(pow(thrust::get<2>(t).mean_x - thrust::get<0>(t).x, 2)*3 +
+                        pow(thrust::get<2>(t).mean_y - thrust::get<0>(t).y, 2)*3 +
+                        pow(thrust::get<2>(t).mean_r - thrust::get<0>(t).r, 2) +
+                        pow(thrust::get<2>(t).mean_g - thrust::get<0>(t).g, 2) +
+                        pow(thrust::get<2>(t).mean_b - thrust::get<0>(t).b, 2));
 
       if(dist < thrust::get<1>(t))
       {
@@ -101,6 +100,8 @@ struct MinCluster
       }
     }
 };
+
+
 
 // ######################################################################
 std::vector<ClassSummary> kmeans(std::vector<PointDescriptor> & points, size_t const k)
@@ -119,7 +120,7 @@ std::vector<ClassSummary> kmeans(std::vector<PointDescriptor> & points, size_t c
   // Create a device copy of the class means
   thrust::device_vector<ClassSummary> device_class_means(k);
 
-  for(int iteration=0; iteration<10; ++iteration)
+  for(int iteration=0; iteration<100; ++iteration)
   {
     std::cout << "Iteration " << iteration << " --------------------------------" << std::endl;
 
@@ -143,7 +144,6 @@ std::vector<ClassSummary> kmeans(std::vector<PointDescriptor> & points, size_t c
     thrust::device_vector<float>  distances(device_points.size(), std::numeric_limits<float>::max());
     for(size_t clusterIdx=0; clusterIdx<k; ++clusterIdx)
     {
-      thrust::device_vector<float> clusterDistances(device_points.size());
       thrust::constant_iterator<ClassSummary> currentCluster(device_class_means[clusterIdx]);
 
       thrust::for_each(
@@ -151,6 +151,11 @@ std::vector<ClassSummary> kmeans(std::vector<PointDescriptor> & points, size_t c
           thrust::make_zip_iterator(thrust::make_tuple(device_points.end(),   distances.end(),   currentCluster)),
           MinCluster());
     }
+  }
+
+  for(size_t i=0; i<points.size(); ++i)
+  {
+    points[i].classid = PointDescriptor(device_points[i]).classid;
   }
 
   thrust::host_vector<ClassSummary> host_class_means(device_class_means.size());
