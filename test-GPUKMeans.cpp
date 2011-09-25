@@ -30,7 +30,7 @@ int main(int argc, char* argv[])
     }
 
   std::cout << "Computing kmeans" << std::endl;
-  std::vector<ClassSummary> classes = kmeans(points, 5);
+  std::vector<ClassSummary> classes = kmeans(points, 40);
   std::cout << "Done" << std::endl;
 
   std::cout << "Points: " << points.size() << std::endl;

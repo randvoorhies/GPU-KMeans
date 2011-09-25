@@ -87,8 +87,8 @@ struct MinCluster
     {
       //device_points, distances, currentCluster
 
-      float dist = sqrt(pow(thrust::get<2>(t).mean_x - thrust::get<0>(t).x, 2)*3 +
-                        pow(thrust::get<2>(t).mean_y - thrust::get<0>(t).y, 2)*3 +
+      float dist = sqrt(pow(thrust::get<2>(t).mean_x - thrust::get<0>(t).x, 2) +
+                        pow(thrust::get<2>(t).mean_y - thrust::get<0>(t).y, 2) +
                         pow(thrust::get<2>(t).mean_r - thrust::get<0>(t).r, 2) +
                         pow(thrust::get<2>(t).mean_g - thrust::get<0>(t).g, 2) +
                         pow(thrust::get<2>(t).mean_b - thrust::get<0>(t).b, 2));
@@ -120,9 +120,9 @@ std::vector<ClassSummary> kmeans(std::vector<PointDescriptor> & points, size_t c
   // Create a device copy of the class means
   thrust::device_vector<ClassSummary> device_class_means(k);
 
-  for(int iteration=0; iteration<100; ++iteration)
+  for(int iteration=0; iteration<7; ++iteration)
   {
-    std::cout << "Iteration " << iteration << " --------------------------------" << std::endl;
+    std::cout << "Iteration " << iteration << std::endl;
 
     //Compute class means (cluster centers)
     for(size_t clusterIdx=0; clusterIdx<k; ++clusterIdx)
@@ -133,11 +133,6 @@ std::vector<ClassSummary> kmeans(std::vector<PointDescriptor> & points, size_t c
       // Compute the mean for this cluster
       device_class_means[clusterIdx] =
         thrust::transform_reduce(device_points.begin(), device_points.end(), ClusterCompUnary(), init, ClusterCompBinary(clusterIdx));
-
-      ClassSummary summary = device_class_means[clusterIdx];
-      std::cout << "Cluster " << clusterIdx << " n: " << summary.n << 
-        " x: " <<summary.mean_x << " y: " << summary.mean_y << " n: " << summary.n << 
-        " r: " << summary.mean_r << " g: " << summary.mean_g << " b: " << summary.mean_b << std::endl;
     }
 
     // Assign each point to its new cluster
@@ -153,15 +148,14 @@ std::vector<ClassSummary> kmeans(std::vector<PointDescriptor> & points, size_t c
     }
   }
 
-  for(size_t i=0; i<points.size(); ++i)
-  {
-    points[i].classid = PointDescriptor(device_points[i]).classid;
-  }
+  thrust::host_vector<PointDescriptor> host_points = device_points;
+  std::copy(host_points.begin(), host_points.end(), points.begin());
 
   thrust::host_vector<ClassSummary> host_class_means(device_class_means.size());
   thrust::copy(device_class_means.begin(), device_class_means.end(), host_class_means.begin());
   std::vector<ClassSummary> class_means(host_class_means.size());
   std::copy(host_class_means.begin(), host_class_means.end(), class_means.begin());
+  std::cout << "Done Grabbing ClassSummaries" << std::endl;
   return class_means;
 }
 
