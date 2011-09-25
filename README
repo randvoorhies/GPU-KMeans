@@ -1,0 +1,4 @@
+This is a simple KMeans example written using NVidia's Thrust library (http://code.google.com/p/thrust/).
+
+No promises are made on the performance of this code, it's mainly just for me to learn about Thrust. 
+
