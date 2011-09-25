@@ -6,26 +6,7 @@
 #include <thrust/functional.h>
 #include <iostream>
 
-struct ClassSummary
-{
-  void initialize()
-  {
-    n = 0;
-    mean_x = 0.0;
-    mean_y = 0.0;
-    mean_r = 0.0;
-    mean_g = 0.0;
-    mean_b = 0.0;
-  }
-
-  size_t n;
-  float mean_x;
-  float mean_y;
-  float mean_r;
-  float mean_g;
-  float mean_b;
-};
-
+// ######################################################################
 struct ClassSummary_unary_op
 {
   __device__
@@ -45,6 +26,7 @@ struct ClassSummary_unary_op
     }
 };
 
+// ######################################################################
 struct ClassSummary_binary_op : 
   public thrust::binary_function<const ClassSummary&, const ClassSummary&, ClassSummary>
 {
@@ -71,6 +53,7 @@ struct ClassSummary_binary_op :
     }
 };
 
+// ######################################################################
 struct ClassSorter :
   public thrust::binary_function<pointdescriptor const&, pointdescriptor const&, bool>
 {
@@ -81,6 +64,7 @@ struct ClassSorter :
     }
 };
 
+// ######################################################################
 struct ClassFinder
 {
   size_t classid;
@@ -94,6 +78,7 @@ struct ClassFinder
     }
 };
 
+// ######################################################################
 struct ClassAssigner
 {
   ClassSummary * classesPtr;
@@ -117,7 +102,6 @@ struct ClassAssigner
       float min_dist = float_max;
       for(size_t i=1; i<num_classes; ++i)
       {
-
         float dist = sqrt(pow(classesPtr[i].mean_x - p.x, 2) +
                           pow(classesPtr[i].mean_y - p.y, 2) +
                           pow(classesPtr[i].mean_r - p.r, 2) +
@@ -125,21 +109,17 @@ struct ClassAssigner
                           pow(classesPtr[i].mean_b - p.b, 2));
 
         if(min_dist > dist)
-        {
-          min_dist = dist;
-          min_idx = i;
-        }
+        { min_dist = dist; min_idx = i; }
       }
 
       pointdescriptor ret = p;
       ret.classid = min_idx;
       return ret;
     }
-
 };
 
 // ######################################################################
-std::vector<size_t> kmeans(std::vector<pointdescriptor> & points, size_t k)
+std::vector<ClassSummary> kmeans(std::vector<pointdescriptor> & points, size_t k)
 {
   // Randomly assign classes to each point descriptor
   thrust::default_random_engine rng;
@@ -152,35 +132,42 @@ std::vector<size_t> kmeans(std::vector<pointdescriptor> & points, size_t k)
   thrust::device_vector<pointdescriptor> device_points(points.size());
   thrust::copy(points.begin(), points.end(), device_points.begin());
 
-  // Sort the point descriptors by their class id
-  ClassSorter sorter;
-  thrust::sort(device_points.begin(), device_points.end(), sorter);
-
-  // Find all of the class means
   thrust::device_vector<ClassSummary> device_class_means(k);
-  thrust::device_vector<pointdescriptor>::iterator classBegin = device_points.begin();
-  for(size_t classid = 0; classid < k; ++classid)
+
+  for(int i=0; i<10; ++i)
   {
-    ClassFinder finder;
-    finder.setClass(classid);
-    thrust::device_vector<pointdescriptor>::iterator classEnd =
-      thrust::find_if_not(classBegin, device_points.end(), finder);
+    // Sort the point descriptors by their class id
+    ClassSorter sorter;
+    thrust::sort(device_points.begin(), device_points.end(), sorter);
 
-    //Compute class means (cluster centers)
-    ClassSummary init_summary;
-    init_summary.initialize();
-    ClassSummary_unary_op unary_summary_op;
-    ClassSummary_binary_op binary_summary_op;
+    // Find all of the class means
+    thrust::device_vector<pointdescriptor>::iterator classBegin = device_points.begin();
+    for(size_t classid = 0; classid < k; ++classid)
+    {
+      ClassFinder finder;
+      finder.setClass(classid);
+      thrust::device_vector<pointdescriptor>::iterator classEnd =
+        thrust::find_if_not(classBegin, device_points.end(), finder);
 
-    device_class_means[classid] = thrust::transform_reduce(classBegin, classEnd,
-        unary_summary_op, init_summary, binary_summary_op);
+      //Compute class means (cluster centers)
+      ClassSummary init_summary;
+      init_summary.initialize();
+      ClassSummary_unary_op unary_summary_op;
+      ClassSummary_binary_op binary_summary_op;
+
+      device_class_means[classid] = thrust::transform_reduce(classBegin, classEnd,
+          unary_summary_op, init_summary, binary_summary_op);
+    }
+
+    // Reassign all point descriptors to their nearest class
+    ClassAssigner assigner(device_class_means);
+    thrust::transform(device_points.begin(), device_points.end(), device_points.begin(), assigner);
   }
 
-  // Reassign all point descriptors to their nearest class
-  ClassAssigner assigner(device_class_means);
-  thrust::transform(device_points.begin(), device_points.end(), device_points.begin(), assigner);
-
-
-
+  thrust::host_vector<ClassSummary> host_class_means(device_class_means.size());
+  thrust::copy(device_class_means.begin(), device_class_means.end(), host_class_means.begin());
+  std::vector<ClassSummary> class_means(host_class_means.size());
+  std::copy(host_class_means.begin(), host_class_means.end(), class_means.begin());
+  return class_means;
 }
 
