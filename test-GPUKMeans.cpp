@@ -16,7 +16,7 @@ int main(int argc, char* argv[])
   CImg<unsigned char> image(argv[1]);
   CImg<unsigned char> kmeans_image(image.width(), image.height(), 1, 3);
 
-  std::vector<pointdescriptor> points(image.width() * image.height());
+  std::vector<PointDescriptor> points(image.width() * image.height());
   size_t idx = 0;
   for(int y = 0; y < image.height(); ++y)
     for(int x = 0; x < image.width(); ++x)
@@ -30,7 +30,7 @@ int main(int argc, char* argv[])
     }
 
   std::cout << "Computing kmeans" << std::endl;
-  std::vector<ClassSummary> classes = kmeans(points, 30);
+  std::vector<ClassSummary> classes = kmeans(points, 5);
   std::cout << "Done" << std::endl;
 
   std::cout << "Points: " << points.size() << std::endl;

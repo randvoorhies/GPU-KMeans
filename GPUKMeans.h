@@ -1,6 +1,6 @@
 #include <vector>
 
-struct pointdescriptor
+struct PointDescriptor
 {
   float x, y, r, g, b;
   size_t classid;
@@ -12,6 +12,7 @@ struct ClassSummary
   void initialize()
   {
     n = 0;
+    id = 0;
     mean_x = 0.0;
     mean_y = 0.0;
     mean_r = 0.0;
@@ -19,6 +20,7 @@ struct ClassSummary
     mean_b = 0.0;
   }
 
+  size_t id;
   size_t n;
   float mean_x;
   float mean_y;
@@ -27,5 +29,5 @@ struct ClassSummary
   float mean_b;
 };
 
-std::vector<ClassSummary> kmeans(std::vector<pointdescriptor> & points, size_t k);
+std::vector<ClassSummary> kmeans(std::vector<PointDescriptor> & points, size_t k);
 
