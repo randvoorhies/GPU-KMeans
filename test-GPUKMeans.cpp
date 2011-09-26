@@ -7,14 +7,16 @@ using namespace cimg_library;
 int main(int argc, char* argv[]) 
 {
 
-  if(argc != 2)
+  if(argc != 3)
   {
-    std::cerr << "Usage: " << argv[0] << " IMAGE_FILE" << std::endl;
+    std::cerr << "Usage: " << argv[0] << " IMAGE_FILE ITERATIONS" << std::endl;
     exit(-1);
   }
 
   CImg<unsigned char> image(argv[1]);
   CImg<unsigned char> kmeans_image(image.width(), image.height(), 1, 3);
+
+  int k = atoi(argv[2]);
 
   std::vector<PointDescriptor> points(image.width() * image.height());
   size_t idx = 0;
@@ -30,7 +32,7 @@ int main(int argc, char* argv[])
     }
 
   std::cout << "Computing kmeans" << std::endl;
-  std::vector<ClassSummary> classes = kmeans(points, 40);
+  std::vector<ClassSummary> classes = kmeans(points, k);
   std::cout << "Done" << std::endl;
 
   std::cout << "Points: " << points.size() << std::endl;
